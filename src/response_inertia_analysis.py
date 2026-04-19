@@ -323,7 +323,7 @@ def compare_conservative_vs_adaptive_windows(
                     if not np.isnan(adaptive_lead_steps)
                     else np.nan
                 ),
-                "adaptive_leads": adaptive_leads,
+                "adaptive_leads": bool(adaptive_leads),
                 "max_evidence_pre_cons": max_evidence_pre_cons,
                 "mean_evidence_pre_cons": mean_evidence_pre_cons,
                 "elevated_evidence_threshold": float(elevated_evidence_threshold),
@@ -492,7 +492,13 @@ def summarize_lead_vs_nonlead(
         )
 
     temp = window_df.copy()
-    temp["elevated_recomputed"] = temp["max_evidence_pre_cons"] >= elevated_threshold
+
+    # Make sure adaptive_leads is truly boolean
+    temp["adaptive_leads"] = temp["adaptive_leads"].fillna(False).astype(bool)
+
+    temp["elevated_recomputed"] = (
+        pd.to_numeric(temp["max_evidence_pre_cons"], errors="coerce") >= elevated_threshold
+    )
 
     lead_df = temp[temp["adaptive_leads"]].copy()
     nonlead_df = temp[~temp["adaptive_leads"]].copy()
@@ -523,8 +529,6 @@ def summarize_lead_vs_nonlead(
             }
         ]
     )
-
-
 def summarize_response_inertia_threshold_sensitivity(
     window_df: pd.DataFrame,
     thresholds: Sequence[float] = (3.0, 3.35, 3.5, 4.0),
