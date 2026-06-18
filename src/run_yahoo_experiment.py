@@ -3,27 +3,30 @@ from __future__ import annotations
 """
 Run the Yahoo benchmark experiments used in the paper.
 
-This script expects locally downloaded Yahoo anomaly CSV files under a folder
-such as:
+Reviewer use:
+    Open this file in PyCharm and click Run.
 
-    Yahoo/
-        real_1.csv
-        real_2.csv
-        ...
+Expected Windows/PyCharm layout:
+    project_root/
+        run_yahoo_experiment_reviewer.py
+        Yahoo/
+            real_1.csv
+            real_2.csv
+            ...
+        outputs/yahoo_final/
 
-It reproduces the Yahoo evaluation pipeline by:
-1. loading each series,
+This script reproduces the Yahoo evaluation pipeline by:
+1. loading each Yahoo series,
 2. computing a causal evidence stream,
 3. applying the static and adaptive policies,
 4. evaluating detection behavior over labeled anomaly windows,
 5. exporting aggregate tables and response-inertia summaries.
 
-The default configuration is intended to match the final Yahoo setting used
-for the paper unless overridden from the command line.
+No command-line arguments are required. The final paper configuration is fixed
+inside YahooExperimentConfig so that reviewers do not need to tune parameters.
 """
 
-import argparse
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Tuple
 
@@ -46,14 +49,33 @@ from response_inertia_analysis import (
 )
 
 
+# ============================================================
+# Configuration
+# ============================================================
+
+# Resolve paths relative to the script location, not PyCharm's current working
+# directory. This makes the script runnable by opening it in PyCharm and
+# clicking Run.
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+
 @dataclass(frozen=True)
 class YahooExperimentConfig:
     """
-    Configuration for the Yahoo benchmark evaluation.
+    Fixed reviewer-safe configuration for the Yahoo benchmark evaluation.
+
+    Expected layout:
+        project_root/
+            run_yahoo_experiment_reviewer.py
+            Yahoo/
+            outputs/yahoo_final_recovered/
+
+    The policy parameters below correspond to the final recovered Yahoo setting
+    used for the manuscript revision.
     """
 
-    yahoo_root: Path = Path("Yahoo")
-    output_dir: Path = Path("outputs/yahoo")
+    yahoo_root: Path = SCRIPT_DIR / "Yahoo"
+    output_dir: Path = SCRIPT_DIR / "outputs" / "yahoo_final_recovered"
 
     half_window_steps: int = 12
     elevated_evidence_threshold: float = 3.35
@@ -67,15 +89,15 @@ class YahooExperimentConfig:
     evidence_window: int = 48
     evidence_min_history: int = 24
 
-    # Conservative policy parameters
-    conservative_threshold: float = 4.0
-    conservative_enter_count: int = 3
-    conservative_exit_count: int = 3
+    # Conservative policy parameters: final recovered Yahoo setting
+    conservative_threshold: float = 3.80
+    conservative_enter_count: int = 2
+    conservative_exit_count: int = 2
 
-    # Adaptive policy parameters
-    adaptive_base_threshold: float = 3.35
+    # Adaptive policy parameters: final recovered Yahoo setting
+    adaptive_base_threshold: float = 3.30
     adaptive_exit_margin: float = 0.45
-    adaptive_switch_penalty: float = 0.27
+    adaptive_switch_penalty: float = 0.15
 
 
 POLICY_ALARM_COLS: List[str] = [
@@ -94,92 +116,6 @@ POLICY_DISPLAY_MAP = {
     "alarm_adaptive_nopenalty": "Adaptive (no switch penalty)",
 }
 
-
-def parse_args() -> argparse.Namespace:
-    """
-    Parse command-line arguments.
-    """
-    parser = argparse.ArgumentParser(
-        description="Run the Yahoo-based real-data evaluation."
-    )
-    parser.add_argument(
-        "--yahoo_root",
-        type=Path,
-        default=Path("Yahoo"),
-        help="Path to the local Yahoo CSV folder.",
-    )
-    parser.add_argument(
-        "--output_dir",
-        type=Path,
-        default=Path("outputs/yahoo"),
-        help="Directory where evaluation tables will be saved.",
-    )
-    parser.add_argument(
-        "--half_window_steps",
-        type=int,
-        default=None,
-        help="Override the half-window size used around labeled events.",
-    )
-    parser.add_argument(
-        "--elevated_evidence_threshold",
-        type=float,
-        default=None,
-        help="Override the elevated-evidence threshold used in response-inertia diagnostics.",
-    )
-    parser.add_argument(
-        "--max_series",
-        type=int,
-        default=None,
-        help="Optional cap on number of series to process.",
-    )
-
-    # Evidence tuning
-    parser.add_argument("--evidence_window", type=int, default=48)
-    parser.add_argument("--evidence_min_history", type=int, default=24)
-
-    # Conservative tuning
-    parser.add_argument("--conservative_threshold", type=float, default=4.0)
-    parser.add_argument("--conservative_enter_count", type=int, default=3)
-    parser.add_argument("--conservative_exit_count", type=int, default=3)
-
-    # Adaptive tuning
-    parser.add_argument("--adaptive_base_threshold", type=float, default=3.35)
-    parser.add_argument("--adaptive_exit_margin", type=float, default=0.45)
-    parser.add_argument("--adaptive_switch_penalty", type=float, default=0.27)
-
-    return parser.parse_args()
-
-
-def build_config_from_args(args: argparse.Namespace) -> YahooExperimentConfig:
-    """
-    Build the experiment configuration from parsed CLI arguments.
-    """
-    cfg = YahooExperimentConfig(
-        yahoo_root=args.yahoo_root,
-        output_dir=args.output_dir,
-    )
-
-    if args.half_window_steps is not None:
-        cfg = replace(cfg, half_window_steps=args.half_window_steps)
-
-    if args.elevated_evidence_threshold is not None:
-        cfg = replace(cfg, elevated_evidence_threshold=args.elevated_evidence_threshold)
-
-    if args.max_series is not None:
-        cfg = replace(cfg, max_series=args.max_series)
-
-    cfg = replace(cfg, evidence_window=args.evidence_window)
-    cfg = replace(cfg, evidence_min_history=args.evidence_min_history)
-
-    cfg = replace(cfg, conservative_threshold=args.conservative_threshold)
-    cfg = replace(cfg, conservative_enter_count=args.conservative_enter_count)
-    cfg = replace(cfg, conservative_exit_count=args.conservative_exit_count)
-
-    cfg = replace(cfg, adaptive_base_threshold=args.adaptive_base_threshold)
-    cfg = replace(cfg, adaptive_exit_margin=args.adaptive_exit_margin)
-    cfg = replace(cfg, adaptive_switch_penalty=args.adaptive_switch_penalty)
-
-    return cfg
 
 
 def make_output_dirs(base_dir: Path) -> None:
@@ -499,9 +435,14 @@ def main() -> None:
     """
     Run the full Yahoo experiment pipeline and export result tables.
     """
-    args = parse_args()
-    cfg = build_config_from_args(args)
+    cfg = YahooExperimentConfig()
     make_output_dirs(cfg.output_dir)
+
+    if not cfg.yahoo_root.exists():
+        raise FileNotFoundError(
+            f"Yahoo dataset directory not found: {cfg.yahoo_root}\n"
+            "Expected layout: place the Yahoo folder in the same directory as this script."
+        )
 
     loader = YahooLoader(cfg.yahoo_root)
     series_list = collect_series_list(loader, cfg)
