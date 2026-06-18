@@ -292,27 +292,9 @@ outputs/yahoo/
 └── yahoo_response_inertia_threshold_sensitivity.csv
 ```
 
----
 
-## Final Yahoo Setting Used in the Paper
 
-The Yahoo experiment script supports command-line tuning. The following command corresponds to the benchmark-level setting used for the final paper results:
 
-```bash
-python src/run_yahoo_experiment.py \
-  --yahoo_root data/Yahoo \
-  --output_dir outputs/yahoo \
-  --conservative_threshold 3.8 \
-  --conservative_enter_count 2 \
-  --conservative_exit_count 2 \
-  --adaptive_base_threshold 3.25 \
-  --adaptive_exit_margin 0.35 \
-  --adaptive_switch_penalty 0.18
-```
-
-If these values are changed, the output values may differ from those reported in the paper.
-
----
 
 ## What Each Experiment Produces
 
