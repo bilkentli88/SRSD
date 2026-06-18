@@ -1,4 +1,4 @@
-# Response Inertia in Sequential Detection: A Policy-Level Analysis of Stability–Responsiveness Trade-offs
+# Response Inertia in Sequential Detection: A Policy-Level Framework for Selective Temporal Adaptation
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -9,39 +9,42 @@
 
 This repository contains the code accompanying the paper:
 
-**Response Inertia in Sequential Detection: A Policy-Level Analysis of Stability–Responsiveness Trade-offs**
+**Response Inertia in Sequential Detection: A Policy-Level Framework for Selective Temporal Adaptation**
 
-Sequential detection systems must balance two competing objectives: they should remain stable under noisy and uncertain observations, yet respond quickly once an event begins to emerge. This repository supports the study of that trade-off through the concept of **response inertia**, defined as policy-induced post-onset delay caused by stability-oriented operating logic under noisy and gradually accumulating evidence.
+Sequential detection systems must balance two competing objectives. They should remain stable under noisy and uncertain observations, but they should also respond quickly once an event begins to emerge. This repository supports the study of this stability-responsiveness trade-off through the concept of **response inertia**, defined as policy-induced post-onset delay caused by stability-oriented operating logic under noisy and gradually accumulating evidence.
 
-The repository reproduces the main experimental components of the paper, including:
+The repository reproduces the main experimental components of the paper:
 
-- controlled synthetic experiments used to illustrate the stability–responsiveness frontier,
-- real-data experiments on **NAB**,
-- real-data experiments on **Yahoo**,
-- response-inertia diagnostics used to compare conservative and adaptive policies, and
-- supporting artifacts associated with both the main paper and the supplementary material.
+- controlled synthetic experiments illustrating the stability-responsiveness frontier;
+- real-data policy-level experiments on the **Numenta Anomaly Benchmark (NAB)**;
+- real-data policy-level experiments on the **Yahoo Webscope anomaly benchmark**;
+- response-inertia diagnostics comparing conservative and adaptive policies on the same evidence trajectories;
+- supporting outputs for the main paper and supplementary material.
+
+The code is intended for research reproducibility. It is not a packaged software library.
 
 ---
 
-## Main Components
+## Main Idea
 
-The repository includes code for:
+The experiments compare different **operating policies** on the same causal evidence stream. This is important because the paper studies whether delay comes from weak evidence or from the detector's own conservative policy logic.
 
-- **Synthetic experiments**  
-  Used to study the stability–responsiveness frontier, trigger overlap, and trigger placement under switching regularization.
+The repository therefore focuses on policy-level quantities such as:
 
-- **NAB real-data experiments**  
-  Used to evaluate static and adaptive policies on heterogeneous real-world anomaly streams.
+- event-window hit rate;
+- detection delay;
+- false-alarm onsets;
+- switching count;
+- adaptive-lead windows;
+- elevated-evidence diagnostics.
 
-- **Yahoo real-data experiments**  
-  Used as a second real benchmark to test whether the same response-inertia pattern persists beyond NAB.
-
-- **Response-inertia diagnostics**  
-  Used to compare conservative and adaptive policies on the same evidence trajectories and identify windows in which earlier adaptive detection coincides with already elevated evidence.
+The goal is not to maximize a single benchmark score, but to decompose the stability-responsiveness trade-off.
 
 ---
 
 ## Repository Structure
+
+A typical repository layout is:
 
 ```text
 repo/
@@ -61,48 +64,91 @@ repo/
     └── response_inertia_analysis.py
 ```
 
+The main executable scripts are:
+
+```text
+src/run_synthetic_experiment.py
+src/run_nab_experiment.py
+src/run_yahoo_experiment.py
+```
+
+Helper modules such as `evidence.py`, `policies.py`, `metrics.py`, and `response_inertia_analysis.py` are imported by the experiment scripts and are not intended to be run as standalone entry points.
+
 ---
 
 ## Requirements
 
-The code is organized as a lightweight research repository rather than a packaged software library. The main dependencies are listed in `requirements.txt`.
+The experiments require Python 3.10 or later.
 
-Typical dependencies include:
+The main dependencies are listed in `requirements.txt`. Typical dependencies include:
 
-- `numpy`
-- `pandas`
-- `matplotlib`
-- `scipy`
+```text
+numpy
+pandas
+matplotlib
+scipy
+```
 
-You may also need any additional libraries referenced in the experiment scripts.
+The experiments are lightweight and can be run on a standard laptop. No GPU is required.
 
 ---
 
 ## Installation
 
-Clone the repository and install the dependencies:
+### Option 1: Using `venv`
+
+Clone the repository:
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
 cd YOUR_REPOSITORY
+```
+
+Create and activate a virtual environment.
+
+On Windows:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+On macOS or Linux:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+### Option 2: Using Conda
+
+```bash
+conda create -n response-inertia python=3.10
+conda activate response-inertia
 pip install -r requirements.txt
 ```
 
 ---
 
-## Data
+## Data Setup
 
-### 1. Synthetic experiment
+### 1. Synthetic Experiment
 
-The synthetic experiment does **not** require any external dataset. Running the synthetic script will generate outputs directly.
+The synthetic experiment does **not** require any external dataset. Running the synthetic script generates the data internally and writes the outputs to the selected output directory.
 
-### 2. NAB real-data experiment
+---
 
-The NAB experiment uses the **Numenta Anomaly Benchmark (NAB)** dataset, which must be obtained separately and placed in a local directory.
+### 2. NAB Real-Data Experiment
 
-The NAB root directory is expected to contain the standard dataset files, including `combined_labels.json` and the corresponding CSV series files.
+The NAB experiment uses the **Numenta Anomaly Benchmark (NAB)** dataset. The dataset must be downloaded separately.
 
-A typical local layout is:
+Place the NAB files in a local folder such as:
 
 ```text
 data/
@@ -114,17 +160,27 @@ data/
     └── realAWSCloudwatch/
 ```
 
-### 3. Yahoo real-data experiment
+The important point is that the folder passed to `--nab_root` must contain `combined_labels.json` and the NAB CSV subfolders.
+
+Example:
+
+```bash
+python src/run_nab_experiment.py --nab_root data/NAB --output_dir outputs/nab
+```
+
+---
+
+### 3. Yahoo Real-Data Experiment
 
 The Yahoo experiment expects locally downloaded Yahoo anomaly CSV files stored in a single folder.
 
-Each CSV file should contain the columns:
+Each CSV file should contain the following columns:
 
 ```text
 timestamp,value,is_anomaly
 ```
 
-A typical local layout is:
+A typical layout is:
 
 ```text
 data/
@@ -135,37 +191,110 @@ data/
     └── ...
 ```
 
-In the current paper setting, the Yahoo experiment uses the **real subset** of the benchmark.
+In the paper setting, the Yahoo experiment uses the **real subset** of the benchmark.
 
----
-
-## Usage
-
-### 1. Run the synthetic experiment
-
-This script reproduces the synthetic study, including frontier summaries, trigger-placement analyses, tables, and figures.
-
-```bash
-python src/run_synthetic_experiment.py --output_dir outputs/synthetic
-```
-
-### 2. Run the NAB real-data experiment
-
-This script reproduces the NAB evaluation, including aggregate tables, response-inertia diagnostics, and case-study outputs.
-
-```bash
-python src/run_nab_experiment.py --nab_root data/NAB --output_dir outputs/nab
-```
-
-### 3. Run the Yahoo real-data experiment
-
-This script reproduces the Yahoo evaluation, including policy-level aggregates and response-inertia summaries.
+Example:
 
 ```bash
 python src/run_yahoo_experiment.py --yahoo_root data/Yahoo --output_dir outputs/yahoo
 ```
 
-### Final Yahoo setting used in the paper
+---
+
+## Running the Experiments
+
+### 1. Synthetic Experiment
+
+Run:
+
+```bash
+python src/run_synthetic_experiment.py --output_dir outputs/synthetic
+```
+
+This reproduces the controlled synthetic study, including:
+
+- the stability-responsiveness frontier;
+- switching-regularization comparisons;
+- trigger-overlap analysis;
+- trigger-placement analysis;
+- representative figures;
+- summary CSV files.
+
+Typical output directory:
+
+```text
+outputs/synthetic/
+├── raw_csv/
+├── summary_csv/
+└── figures/
+```
+
+---
+
+### 2. NAB Experiment
+
+Run:
+
+```bash
+python src/run_nab_experiment.py \
+  --nab_root data/NAB \
+  --output_dir outputs/nab
+```
+
+This reproduces the NAB policy-level evaluation, including:
+
+- static aggressive policy;
+- static mid policy;
+- static conservative policy;
+- adaptive policy;
+- adaptive policy without switching penalty;
+- response-inertia diagnostics.
+
+Typical output files include:
+
+```text
+outputs/nab/
+├── figures/
+├── nab_per_series_summary.csv
+├── nab_policy_aggregate.csv
+├── nab_category_aggregate.csv
+├── nab_response_inertia_windows.csv
+├── nab_response_inertia_summary.csv
+├── nab_response_inertia_by_category.csv
+├── nab_response_inertia_lead_vs_nonlead.csv
+└── nab_response_inertia_threshold_sensitivity.csv
+```
+
+---
+
+### 3. Yahoo Experiment
+
+Run:
+
+```bash
+python src/run_yahoo_experiment.py \
+  --yahoo_root data/Yahoo \
+  --output_dir outputs/yahoo
+```
+
+This reproduces the Yahoo policy-level evaluation and response-inertia diagnostics.
+
+Typical output files include:
+
+```text
+outputs/yahoo/
+├── yahoo_per_series_summary.csv
+├── yahoo_policy_aggregate.csv
+├── yahoo_category_aggregate.csv
+├── yahoo_response_inertia_windows.csv
+├── yahoo_response_inertia_summary.csv
+├── yahoo_response_inertia_lead_vs_nonlead.csv
+└── yahoo_response_inertia_threshold_sensitivity.csv
+```
+
+---
+
+## Final Yahoo Setting Used in the Paper
 
 The Yahoo experiment script supports command-line tuning. The following command corresponds to the benchmark-level setting used for the final paper results:
 
@@ -181,78 +310,85 @@ python src/run_yahoo_experiment.py \
   --adaptive_switch_penalty 0.18
 ```
 
----
-
-## Output
-
-### Synthetic experiment outputs
-
-The synthetic script writes outputs under the specified synthetic output directory, typically with subfolders such as:
-
-```text
-outputs/synthetic/
-├── raw_csv/
-├── summary_csv/
-└── figures/
-```
-
-These outputs include frontier summaries, Wilcoxon comparison tables, ablation summaries, and representative figures.
-
-### NAB experiment outputs
-
-The NAB script writes outputs under the specified NAB output directory, including summary tables and figures such as:
-
-```text
-outputs/nab/
-├── figures/
-├── nab_per_series_summary.csv
-├── nab_policy_aggregate.csv
-├── nab_category_aggregate.csv
-├── nab_response_inertia_windows.csv
-├── nab_response_inertia_summary.csv
-├── nab_response_inertia_by_category.csv
-├── nab_response_inertia_lead_vs_nonlead.csv
-└── nab_response_inertia_threshold_sensitivity.csv
-```
-
-### Yahoo experiment outputs
-
-The Yahoo script writes outputs under the specified Yahoo output directory, including:
-
-```text
-outputs/yahoo/
-├── yahoo_per_series_summary.csv
-├── yahoo_policy_aggregate.csv
-├── yahoo_category_aggregate.csv
-├── yahoo_response_inertia_windows.csv
-├── yahoo_response_inertia_summary.csv
-├── yahoo_response_inertia_lead_vs_nonlead.csv
-└── yahoo_response_inertia_threshold_sensitivity.csv
-```
-
-The repository is intended to reproduce both the main-paper outputs and supplementary experimental artifacts.
+If these values are changed, the output values may differ from those reported in the paper.
 
 ---
 
-## Notes
+## What Each Experiment Produces
 
-- The main executable scripts are:
-  - `run_synthetic_experiment.py`
-  - `run_nab_experiment.py`
-  - `run_yahoo_experiment.py`
+### Synthetic Experiment
 
-- Helper modules such as `response_inertia_analysis.py` are imported by the experiment scripts and are not intended to be run as standalone entry points.
+The synthetic experiment produces the tables and figures used to analyze the stability-responsiveness frontier and trigger placement. It is the easiest experiment to run because it does not require external data.
 
-- Dataset paths and output folders are provided through command-line arguments rather than hard-coded local paths.
+Recommended first command for new users:
 
-- The Yahoo timestamps are converted internally into equally spaced datetimes so that the same timestamp-based evaluation logic can be used consistently across benchmarks.
+```bash
+python src/run_synthetic_experiment.py --output_dir outputs/synthetic
+```
+
+---
+
+### NAB Experiment
+
+The NAB experiment produces aggregate policy-level tables and response-inertia diagnostics. It requires the NAB dataset to be available locally.
+
+Recommended command:
+
+```bash
+python src/run_nab_experiment.py --nab_root data/NAB --output_dir outputs/nab
+```
+
+---
+
+### Yahoo Experiment
+
+The Yahoo experiment produces aggregate policy-level tables and response-inertia diagnostics on the real Yahoo anomaly benchmark subset.
+
+Recommended command:
+
+```bash
+python src/run_yahoo_experiment.py --yahoo_root data/Yahoo --output_dir outputs/yahoo
+```
+
+For exact reproduction of the final paper setting, use the full Yahoo command given above.
 
 ---
 
 
+
+
+
+
+
+
+
+## Expected Workflow for a New User
+
+A new user can follow this minimal workflow:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
+cd YOUR_REPOSITORY
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python src/run_synthetic_experiment.py --output_dir outputs/synthetic
+```
+
+After confirming that the synthetic experiment runs successfully, continue with NAB and Yahoo after downloading the external datasets.
 
 ---
 
 ## License
 
 This repository is released under the MIT License. See the `LICENSE` file for details.
+
+---
+
+## Citation
+
+If you use this code, please cite the accompanying paper:
+
+```text
+Altay, A. T. Response Inertia in Sequential Detection: A Policy-Level Framework for Selective Temporal Adaptation. Knowledge-Based Systems, revised manuscript.
+```
