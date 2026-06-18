@@ -1,6 +1,7 @@
 """
 Run the NAB-based real-data evaluation used in the paper
-"On the Trade-off Between Stability and Responsiveness in Sequential Detection".
+"Response Inertia in Sequential Detection:
+A Policy-Level Analysis of Stability-Responsiveness Trade-offs".
 
 This script:
 1. loads selected NAB time series,
@@ -22,14 +23,19 @@ Expected companion modules in src/:
     - evaluation.py
     - response_inertia_analysis.py
 
-Example:
-    python src/run_nab_experiment.py --nab_root data/NAB --output_dir outputs/nab
+Reviewer use:
+    Open this file in PyCharm and click Run.
+
+Expected repository layout used by this reviewer script:
+    project_root/
+        NAB/
+        run_nab_experiment_same_folder.py
+        outputs/nab/
 """
 
 from __future__ import annotations
 
-import argparse
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple
 
@@ -57,10 +63,78 @@ from response_inertia_analysis import (
 # Configuration
 # ============================================================
 
+# Resolve paths relative to the script location, not the current working
+# directory. This makes the script safe to run directly from PyCharm on Windows.
+#
+# Expected layout:
+#
+#   CyberNEW Project/
+#       run_nab_experiment_same_folder.py
+#       NAB/
+#       outputs/nab/
+#
+# No command-line arguments are required.
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+# Reviewer-safe Windows/PyCharm layout:
+#
+#   CyberNEW Project/
+#       run_nab_experiment_same_folder.py
+#       NAB/
+#       outputs/nab/
+#
+# No command-line arguments are required. The NAB folder is expected to be in
+# the same directory as this script.
+PROJECT_ROOT = SCRIPT_DIR
+DEFAULT_NAB_ROOT = SCRIPT_DIR / "NAB"
+
+
+@dataclass(frozen=True)
+class NABPolicyConfig:
+    """Fixed policy settings used in the NAB experiment.
+
+    These values are intentionally defined in one place to make the experiment
+    reproducible and auditable. Reviewers do not need to provide command-line
+    arguments or edit the script before running it.
+    """
+    aggressive_threshold: float = 3.0
+
+    mid_threshold: float = 3.35
+
+    conservative_threshold: float = 4.0
+    conservative_enter_count: int = 3
+    conservative_exit_count: int = 3
+
+    adaptive_base_threshold: float = 3.35
+    adaptive_enter_margin: float = 0.0
+    adaptive_exit_margin: float = 0.45
+    adaptive_adaptation_rate: float = 0.065
+    adaptive_relaxation_rate: float = 0.04
+    adaptive_switch_penalty: float = 0.27
+    adaptive_min_threshold: float = 2.45
+    adaptive_max_threshold: float = 4.7
+
+    nopenalty_base_threshold: float = 3.35
+    nopenalty_enter_margin: float = 0.0
+    nopenalty_exit_margin: float = 0.45
+    nopenalty_adaptation_rate: float = 0.065
+    nopenalty_relaxation_rate: float = 0.04
+    nopenalty_min_threshold: float = 2.45
+    nopenalty_max_threshold: float = 4.7
+
+
 @dataclass(frozen=True)
 class NABExperimentConfig:
-    nab_root: Path = Path("data/NAB")
-    output_dir: Path = Path("outputs/nab")
+    # Default reviewer-safe paths. The expected repository layout is:
+    #
+    #   project_root/
+    #       data/NAB/
+    #       src/run_nab_experiment.py
+    #       outputs/nab/
+    #
+    # The output directory is created automatically if it does not exist.
+    nab_root: Path = DEFAULT_NAB_ROOT
+    output_dir: Path = PROJECT_ROOT / "outputs" / "nab"
 
     half_window_steps: int = 24
     elevated_evidence_threshold: float = 3.35
@@ -81,59 +155,9 @@ class NABExperimentConfig:
         "realTraffic/TravelTime_451.csv",
     )
 
+    generate_case_plots: bool = True
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Run the NAB-based real-data evaluation."
-    )
-    parser.add_argument(
-        "--nab_root",
-        type=Path,
-        default=Path("data/NAB"),
-        help="Path to the NAB dataset root directory.",
-    )
-    parser.add_argument(
-        "--output_dir",
-        type=Path,
-        default=Path("outputs/nab"),
-        help="Directory where evaluation tables and figures will be saved.",
-    )
-    parser.add_argument(
-        "--half_window_steps",
-        type=int,
-        default=None,
-        help="Override the half-window size used around labeled events.",
-    )
-    parser.add_argument(
-        "--elevated_evidence_threshold",
-        type=float,
-        default=None,
-        help="Override the elevated-evidence threshold used in response-inertia diagnostics.",
-    )
-    parser.add_argument(
-        "--skip_case_plots",
-        action="store_true",
-        help="Run the full evaluation but skip case-study plot generation.",
-    )
-    return parser.parse_args()
-
-
-def build_config_from_args(args: argparse.Namespace) -> NABExperimentConfig:
-    cfg = NABExperimentConfig(
-        nab_root=args.nab_root,
-        output_dir=args.output_dir,
-    )
-
-    if args.half_window_steps is not None:
-        cfg = replace(cfg, half_window_steps=args.half_window_steps)
-
-    if args.elevated_evidence_threshold is not None:
-        cfg = replace(
-            cfg,
-            elevated_evidence_threshold=args.elevated_evidence_threshold,
-        )
-
-    return cfg
+    policy: NABPolicyConfig = field(default_factory=NABPolicyConfig)
 
 
 def make_output_dirs(base_dir: Path) -> Dict[str, Path]:
@@ -207,52 +231,55 @@ def run_adaptive_ablation_policy(
     return out
 
 
-def apply_all_policies(df_scored: pd.DataFrame) -> pd.DataFrame:
+def apply_all_policies(
+    df_scored: pd.DataFrame,
+    policy_cfg: NABPolicyConfig,
+) -> pd.DataFrame:
     out = df_scored.copy()
 
     out = run_aggressive_policy(
         out,
         evidence_col="evidence",
-        threshold=3.0,
+        threshold=policy_cfg.aggressive_threshold,
     )
 
     out = run_mid_policy(
         out,
         evidence_col="evidence",
-        threshold=3.35,
+        threshold=policy_cfg.mid_threshold,
     )
 
     out = run_conservative_policy(
         out,
         evidence_col="evidence",
-        threshold=4.0,
-        enter_count=3,
-        exit_count=3,
+        threshold=policy_cfg.conservative_threshold,
+        enter_count=policy_cfg.conservative_enter_count,
+        exit_count=policy_cfg.conservative_exit_count,
     )
 
     out = run_adaptive_policy(
         out,
         evidence_col="evidence",
-        base_threshold=3.35,
-        enter_margin=0.0,
-        exit_margin=0.45,
-        adaptation_rate=0.065,
-        relaxation_rate=0.04,
-        switch_penalty=0.27,
-        min_threshold=2.45,
-        max_threshold=4.7,
+        base_threshold=policy_cfg.adaptive_base_threshold,
+        enter_margin=policy_cfg.adaptive_enter_margin,
+        exit_margin=policy_cfg.adaptive_exit_margin,
+        adaptation_rate=policy_cfg.adaptive_adaptation_rate,
+        relaxation_rate=policy_cfg.adaptive_relaxation_rate,
+        switch_penalty=policy_cfg.adaptive_switch_penalty,
+        min_threshold=policy_cfg.adaptive_min_threshold,
+        max_threshold=policy_cfg.adaptive_max_threshold,
     )
 
     out = run_adaptive_ablation_policy(
         out,
         evidence_col="evidence",
-        base_threshold=3.35,
-        enter_margin=0.0,
-        exit_margin=0.45,
-        adaptation_rate=0.065,
-        relaxation_rate=0.04,
-        min_threshold=2.45,
-        max_threshold=4.7,
+        base_threshold=policy_cfg.nopenalty_base_threshold,
+        enter_margin=policy_cfg.nopenalty_enter_margin,
+        exit_margin=policy_cfg.nopenalty_exit_margin,
+        adaptation_rate=policy_cfg.nopenalty_adaptation_rate,
+        relaxation_rate=policy_cfg.nopenalty_relaxation_rate,
+        min_threshold=policy_cfg.nopenalty_min_threshold,
+        max_threshold=policy_cfg.nopenalty_max_threshold,
     )
 
     required_cols = [
@@ -322,7 +349,7 @@ def run_one_series(
         eps=1e-8,
     )
 
-    df_scored = apply_all_policies(df_scored)
+    df_scored = apply_all_policies(df_scored, cfg.policy)
 
     results_df = evaluate_all_policies(
         df=df_scored,
@@ -559,9 +586,14 @@ def plot_case_study(
 # ============================================================
 
 def main() -> None:
-    args = parse_args()
-    cfg = build_config_from_args(args)
+    cfg = NABExperimentConfig()
     dirs = make_output_dirs(cfg.output_dir)
+
+    if not cfg.nab_root.exists():
+        raise FileNotFoundError(
+            f"NAB dataset directory not found: {cfg.nab_root}\\n"
+            "Expected layout: place the NAB folder in the same directory as this script."
+        )
 
     loader = NABLoader(cfg.nab_root)
     series_list = collect_series_list(loader, cfg)
@@ -578,6 +610,25 @@ def main() -> None:
     print(f"Evaluation window: +/- {cfg.half_window_steps} steps")
     print(f"Elevated evidence threshold: {cfg.elevated_evidence_threshold}")
     print(f"Threshold sensitivity values: {cfg.threshold_sensitivity_values}")
+    print("Policy configuration:")
+    print(f"- aggressive threshold: {cfg.policy.aggressive_threshold}")
+    print(f"- mid threshold: {cfg.policy.mid_threshold}")
+    print(
+        "- conservative: "
+        f"threshold={cfg.policy.conservative_threshold}, "
+        f"enter_count={cfg.policy.conservative_enter_count}, "
+        f"exit_count={cfg.policy.conservative_exit_count}"
+    )
+    print(
+        "- adaptive: "
+        f"base_threshold={cfg.policy.adaptive_base_threshold}, "
+        f"switch_penalty={cfg.policy.adaptive_switch_penalty}"
+    )
+    print(
+        "- adaptive no switch penalty: "
+        f"base_threshold={cfg.policy.nopenalty_base_threshold}, "
+        "switch_penalty=0.0"
+    )
     print()
 
     all_result_frames: List[pd.DataFrame] = []
@@ -678,7 +729,7 @@ def main() -> None:
     )
 
     # Save case-study plots
-    if not args.skip_case_plots:
+    if cfg.generate_case_plots:
         for series_name, (df_scored, labels) in cached_case_studies.items():
             safe_name = series_name.replace("/", "__").replace(".csv", "")
             plot_case_study(
@@ -740,7 +791,7 @@ def main() -> None:
     print(inertia_by_category_csv)
     print(inertia_lead_vs_nonlead_csv)
     print(inertia_threshold_sensitivity_csv)
-    if not args.skip_case_plots:
+    if cfg.generate_case_plots:
         print(dirs["figures"])
 
 
